@@ -1,0 +1,89 @@
+name: DB CI
+
+on:
+  pull_request:
+    branches: [develop, qa, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: telemed_ia
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      FLYWAY_URL: jdbc:postgresql://localhost:5432/telemed_ia
+      FLYWAY_USER: postgres
+      FLYWAY_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create role used by grants
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'appointment_scheduling_app') THEN
+                  CREATE ROLE appointment_scheduling_app LOGIN PASSWORD 'temp';
+              END IF;
+          END$$;
+          SQL
+
+      - name: Migrate from empty database
+        run: |
+          docker run --rm --network host \
+            -v "$PWD:/workspace" -w /workspace \
+            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
+            flyway/flyway:10.20.1 -configFiles=flyway.conf migrate
+
+      - name: Second migrate applies zero changes
+        run: |
+          docker run --rm --network host \
+            -v "$PWD:/workspace" -w /workspace \
+            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
+            flyway/flyway:10.20.1 -configFiles=flyway.conf migrate | tee /tmp/out.txt
+          grep -q "No migration necessary" /tmp/out.txt
+
+      - name: Roll back the schema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -v ON_ERROR_STOP=1 \
+            -f 05_rollbacks/03_dcl/01_grants/U008__grant_permissions.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -v ON_ERROR_STOP=1 \
+            -f 05_rollbacks/01_ddl/01_schemas/U001__create_schema_appointment_scheduling.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -v ON_ERROR_STOP=1 \
+            -f 05_rollbacks/03_dcl/00_roles/U007__create_roles.sql
+
+      - name: Verify schema no longer exists
+        run: |
+          EXISTS=$(PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -tAc \
+            "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'appointment_scheduling'")
+          if [ "$EXISTS" != "0" ]; then
+            echo "Schema still exists after rollback"
+            exit 1
+          fi
+          ROLES=$(PGPASSWORD=postgres psql -h localhost -U postgres -d telemed_ia -tAc \
+            "SELECT COUNT(*) FROM pg_roles WHERE rolname IN ('appointment_scheduling_reader','appointment_scheduling_writer')")
+          if [ "$ROLES" != "0" ]; then
+            echo "Roles still exist after rollback"
+            exit 1
+          fi

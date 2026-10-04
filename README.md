@@ -1,25 +1,57 @@
 # telemed-ia-appointment-scheduling-db
 
-> appointment-scheduling bounded context: database (schema, seeds, migrations)
+Database schema of the **appointment-scheduling** bounded context.
 
-Part of the **LMS Library** distributed system — team `lms-library`, Grupo 2.
-Governance and documentation live in [`library-docs`](https://github.com/code-corhuila/library-docs).
+Part of team `telemed-ia`, Grupo 2.
 
-## Branching
+## What this repo is
 
-Three permanent branches. **None of them accepts a direct commit** — you enter through a child
-branch and leave through a Pull Request.
+Owns the structure and migrations of the `appointment_scheduling` schema
+inside the single PostgreSQL instance defined by `-infra-postgres`.
 
+This repo does **not** define a database instance. Per Anexo J.3.1,
+the instance is owned by the infra repo. This repo only ships the
+migration executor.
+
+## Stack
+
+| Component | Version |
+|---|---|
+| PostgreSQL | 16 |
+| Flyway | 10.20.1 |
+| Docker | latest |
+
+## Structure
+
+```text
+01_ddl/          definition (schema, tables, triggers, indexes)
+02_dml/          data (seed, patches)
+03_dcl/          access (roles, grants)
+04_tcl/          transactions
+05_rollbacks/    reversals (U<n>__*.sql)
+deploy/          compose.yml with only the Flyway executor
+flyway.conf      Flyway configuration
 ```
-develop  <--PR--  feat/... fix/... chore/...
-qa       <--PR--  qa/...
-main     <--PR--  release/...  hotfix/...
+
+## How to apply migrations
+
+From `-infra-postgres`:
+
+```bash
+docker compose --env-file env/dev.env --profile tooling run --rm appointment-scheduling-db-migrate
 ```
 
-Promotion happens **by re-application** (`git cherry-pick -x`), never by merging one permanent
-branch into another: `merge develop -> qa` and `merge qa -> main` do not exist in this model.
+## Rules
 
-`main` requires **1 approval from `ariel5253`**. On `develop` and `qa` the team sets its own review
-rule.
+- Schema is `appointment_scheduling`; nothing lives in `public`.
+- No FK to other domains (Anexo J.3.4).
+- A migration already applied is never edited.
+- Every V has a U in `05_rollbacks/` with the same number.
+- `flyway_history_appointment_scheduling` is the control table for this domain.
 
-Full policy: `00-governance/branching-policy.md` in `library-docs`.
+## Related documentation
+
+- `telemed-ia-docs/02-domain/domain-map.md`
+- `telemed-ia-docs/02-domain/entities-and-rules.md`
+- `telemed-ia-docs/09-microservices/services/06-appointment-service/data-model.md`
+- `telemed-ia-docs/05-architecture/decisions/records/ADR-009-appointment-availability-ownership.md`

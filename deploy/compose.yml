@@ -1,0 +1,22 @@
+name: telemed-ia-appointment-scheduling-db
+
+services:
+  appointment-scheduling-db-migrate:
+    image: flyway/flyway:10.20.1
+    container_name: appointment-scheduling-db-migrate
+    profiles: [tooling]
+    volumes:
+      - ..:/workspace:ro
+    working_dir: /workspace
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/${PG_DATABASE:-telemed_ia}
+      FLYWAY_USER: ${APPOINTMENT_SCHEDULING_APP_USER:-appointment_scheduling_app}
+      FLYWAY_PASSWORD: ${APPOINTMENT_SCHEDULING_APP_PASSWORD:?required}
+    command: ["-configFiles=flyway.conf", "migrate"]
+    networks:
+      - platform
+
+networks:
+  platform:
+    external: true
+    name: platform

@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS appointment_scheduling.idx_appointments_patient;
+DROP INDEX IF EXISTS appointment_scheduling.idx_appointments_professional;
+DROP INDEX IF EXISTS appointment_scheduling.idx_appointments_professional_time;
+DROP INDEX IF EXISTS appointment_scheduling.idx_appointments_status;
+DROP INDEX IF EXISTS appointment_scheduling.idx_professional_availability_professional;

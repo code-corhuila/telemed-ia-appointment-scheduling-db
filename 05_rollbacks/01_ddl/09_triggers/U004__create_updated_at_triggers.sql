@@ -1,0 +1,3 @@
+DROP TRIGGER IF EXISTS trg_appointments_updated_at ON appointment_scheduling.appointments;
+DROP TRIGGER IF EXISTS trg_professional_availability_updated_at ON appointment_scheduling.professional_availability;
+DROP FUNCTION IF EXISTS appointment_scheduling.set_updated_at();

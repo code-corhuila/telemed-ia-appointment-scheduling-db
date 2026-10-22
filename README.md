@@ -49,6 +49,27 @@ docker compose --env-file env/dev.env --profile tooling run --rm appointment-sch
 - Every V has a U in `05_rollbacks/` with the same number.
 - `flyway_history_appointment_scheduling` is the control table for this domain.
 
+## Identificadores (UUID)
+
+Desde `V009__migrate_ids_to_uuid.sql`, todos los identificadores de
+`appointment_scheduling` son `uuid`:
+
+- `appointments.id`, `patient_id`, `professional_id`,
+  `preconsultation_summary_id`, `post_summary_id`.
+- `professional_availability.id`, `professional_id`.
+
+Motivo: alineación con `identity-and-access` (sub del JWT es UUID),
+`intelligent-agent-db` (exige UUID) y la norma del curso
+("camelCase JSON and UUID ids").
+
+Seed de desarrollo: `professional_availability` conserva el seed
+original `5001` traducido al uuid determinista
+`00000000-0000-0000-0000-000000005001`. Cualquier seed futuro debe
+usar UUIDs fijos reproducibles.
+
+Reversión: `U009` solo elimina los índices añadidos. La reversión de
+tipo no es simétrica; ver el comentario en `U009`.
+
 ## Related documentation
 
 - `telemed-ia-docs/02-domain/domain-map.md`

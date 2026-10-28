@@ -70,6 +70,25 @@ usar UUIDs fijos reproducibles.
 Reversión: `U009` solo elimina los índices añadidos. La reversión de
 tipo no es simétrica; ver el comentario en `U009`.
 
+## Outbox (V011 + V012)
+
+`V011__create_outbox_event.sql` crea la tabla `outbox_event` para el
+patrón Transactional Outbox. `V012__harden_outbox_event.sql` la
+endurece con:
+
+- `event_id uuid UNIQUE DEFAULT gen_random_uuid()`: UUID público del
+  evento (distinto del `id` interno de la fila). Es el que viaja en el
+  envelope ADR-011 como `eventId` y el que el consumidor usa como
+  `Idempotency-Key` o para deduplicar.
+- `correlation_id varchar(100) NOT NULL DEFAULT gen_random_uuid()::text`:
+  propagado desde `X-Correlation-Id` del request original.
+- `attempts int NOT NULL DEFAULT 0`, `last_error text`:
+  usados por el `OutboxPoller` para backoff y diagnóstico. Tras N
+  intentos (`outboxMaxAttempts`), el evento pasa a `FAILED`.
+- `updated_at timestamptz NOT NULL DEFAULT now()`: trazabilidad de
+  status/attempts.
+- Índices `idx_outbox_event_failed` e `idx_outbox_event_event_type`.
+
 ## Related documentation
 
 - `telemed-ia-docs/02-domain/domain-map.md`

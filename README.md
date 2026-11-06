@@ -49,6 +49,46 @@ docker compose --env-file env/dev.env --profile tooling run --rm appointment-sch
 - Every V has a U in `05_rollbacks/` with the same number.
 - `flyway_history_appointment_scheduling` is the control table for this domain.
 
+## Identificadores (UUID)
+
+Desde `V009__migrate_ids_to_uuid.sql`, todos los identificadores de
+`appointment_scheduling` son `uuid`:
+
+- `appointments.id`, `patient_id`, `professional_id`,
+  `preconsultation_summary_id`, `post_summary_id`.
+- `professional_availability.id`, `professional_id`.
+
+Motivo: alineación con `identity-and-access` (sub del JWT es UUID),
+`intelligent-agent-db` (exige UUID) y la norma del curso
+("camelCase JSON and UUID ids").
+
+Seed de desarrollo: `professional_availability` conserva el seed
+original `5001` traducido al uuid determinista
+`00000000-0000-0000-0000-000000005001`. Cualquier seed futuro debe
+usar UUIDs fijos reproducibles.
+
+Reversión: `U009` solo elimina los índices añadidos. La reversión de
+tipo no es simétrica; ver el comentario en `U009`.
+
+## Outbox (V011 + V012)
+
+`V011__create_outbox_event.sql` crea la tabla `outbox_event` para el
+patrón Transactional Outbox. `V012__harden_outbox_event.sql` la
+endurece con:
+
+- `event_id uuid UNIQUE DEFAULT gen_random_uuid()`: UUID público del
+  evento (distinto del `id` interno de la fila). Es el que viaja en el
+  envelope ADR-011 como `eventId` y el que el consumidor usa como
+  `Idempotency-Key` o para deduplicar.
+- `correlation_id varchar(100) NOT NULL DEFAULT gen_random_uuid()::text`:
+  propagado desde `X-Correlation-Id` del request original.
+- `attempts int NOT NULL DEFAULT 0`, `last_error text`:
+  usados por el `OutboxPoller` para backoff y diagnóstico. Tras N
+  intentos (`outboxMaxAttempts`), el evento pasa a `FAILED`.
+- `updated_at timestamptz NOT NULL DEFAULT now()`: trazabilidad de
+  status/attempts.
+- Índices `idx_outbox_event_failed` e `idx_outbox_event_event_type`.
+
 ## Related documentation
 
 - `telemed-ia-docs/02-domain/domain-map.md`
